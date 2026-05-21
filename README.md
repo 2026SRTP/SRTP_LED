@@ -11,6 +11,8 @@
   - https://item.taobao.com/item.htm?id=836902261308&mi_id=0000wi1myFKNgTFqwjIAot9fEJTIzO_BVE61nehogWYC3FM
 - LED灯条：12v灯条
   - https://item.taobao.com/item.htm?id=747644329421&mi_id=0000EgNx85LSJh7EU1hhozFyAGioy8HOVdWnOskD-klaOgg&sku_properties=122276201%3A10122
+- 光敏电阻：LDR模块
+  - https://e.tb.cn/h.RdH5vJoKmUwEpDR?tk=CRmw5u7choQ
 
 ### 引脚配置：
 - ky-040：
@@ -19,6 +21,8 @@
   - SW：PB15
 - Mosfet：
   - IO：PA0
+- LDR：
+  - ADC：PA1
 
 ### 软件部分：
 - ky040.c/h：完成
