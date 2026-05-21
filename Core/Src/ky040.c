@@ -16,8 +16,6 @@ static int brightness_units = 0;
 
 // 可调参数：旋钮转满一圈对应的编码器步数（KY040常见约20步/圈）
 #define KY040_STEPS_PER_REV          20
-// 可调参数：亮度上限百分比（当前为原最大亮度的20%）
-#define KY040_BRIGHTNESS_LIMIT_PCT   20
 
 // 初始化编码器
 void KY040_Init() {

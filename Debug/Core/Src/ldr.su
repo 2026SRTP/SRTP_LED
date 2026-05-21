@@ -1,0 +1,4 @@
+../Core/Src/ldr.c:17:13:LDR_InitHardware	8	static
+../Core/Src/ldr.c:31:10:LDR_Read	16	static
+../Core/Src/ldr.c:55:10:LDR_ReadAverage	16	static
+../Core/Src/ldr.c:71:10:LDR_ToPWM	32	static

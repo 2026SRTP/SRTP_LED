@@ -17,12 +17,15 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include <stdint.h>
 #include "main.h"
+#include "adc.h"
 #include "tim.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "ldr.h"
 #include "ky040.h"
 #include "mosfet.h"
 /* USER CODE END Includes */
@@ -45,7 +48,14 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+static uint16_t last_adc = 0U;
+static uint16_t last_pwm = 0U;
+static uint8_t auto_light_ready = 0U;
 
+#define LDR_MANUAL_OVERRIDE_MS 5000U
+
+static int last_count_snapshot = -1;
+static uint32_t last_manual_tick = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -90,6 +100,7 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   KY040_Init();
   MOSFET_Init();
@@ -103,19 +114,59 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    // 更新编码器状态并处理按键输入
+    /* 更新编码器状态并处理按键输入 */
     KY040_Update();
     KY040_Key();
 
-    // 根据编码器计数值调整LED亮度
-    if (light_on) {
-      MOSFET_Update(count);
+    /* 手动控制检测 */
+    if (last_count_snapshot != count) {
+        /* 编码器有动作 —— 进入手动优先 */
+        last_count_snapshot = count;
+        last_manual_tick = HAL_GetTick();
+        if (light_on) {
+            MOSFET_Update(count);
+        } else {
+            MOSFET_Update(0);
+        }
     } else {
-      MOSFET_Update(0);
+        /* 如果在手动优先超时时间内，继续维持手动值 */
+        if ((HAL_GetTick() - last_manual_tick) < LDR_MANUAL_OVERRIDE_MS) {
+            if (light_on) {
+                MOSFET_Update(count);
+            } else {
+                MOSFET_Update(0);
+            }
+        } else {
+            /* 自动模式：LDR 采样 + 滞回更新 PWM */
+            if (light_on) {
+                uint16_t adc_value = LDR_ReadAverage();
+
+                if ((auto_light_ready == 0U) ||
+                    ((adc_value > last_adc) ? (adc_value - last_adc) : (last_adc - adc_value)) > LDR_HYSTERESIS_THRESHOLD)
+                {
+                    last_adc = adc_value;
+                    last_pwm = LDR_ToPWM(adc_value);
+                    MOSFET_Update((int)last_pwm);
+                    auto_light_ready = 1U;
+                } else {
+                    MOSFET_Update((int)last_pwm);
+                }
+            } else {
+                MOSFET_Update(0);
+                auto_light_ready = 0U;
+            }
+        }
     }
+
+    HAL_Delay(50);
+    /* USER CODE END 3 */
   }
-  /* USER CODE END 3 */
+  
+  /* USER CODE END WHILE */
+  
 }
+
+
 
 /**
   * @brief System Clock Configuration
@@ -125,6 +176,7 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -151,6 +203,12 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
+  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV6;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
   }
