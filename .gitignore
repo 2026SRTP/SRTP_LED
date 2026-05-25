@@ -1,0 +1,25 @@
+# 忽略 ST 官方标准外设库和 HAL 库驱动
+Drivers/
+Middlewares/
+
+# 忽略编译生成的二进制和中间文件
+Debug/
+Release/
+build/
+*.hex
+*.bin
+*.elf
+*.o
+*.d
+
+# 忽略 IDE 和 CubeMX 自身的配置、中间记录与历史缓存
+.settings/
+.vscode/
+.cursor/
+.mxproject
+.project
+.cproject
+*.launch
+
+# 忽略链接脚本
+*FLASH.ld
