@@ -13,17 +13,28 @@
   - https://item.taobao.com/item.htm?id=747644329421&mi_id=0000EgNx85LSJh7EU1hhozFyAGioy8HOVdWnOskD-klaOgg&sku_properties=122276201%3A10122
 - 光敏电阻：LDR模块
   - https://e.tb.cn/h.RdH5vJoKmUwEpDR?tk=CRmw5u7choQ
+- PIR：HC-SR501模块
+  - https://e.tb.cn/h.RVeZWvKvHjrsj2I?tk=hoqW5wNxnyj
 
 ### 引脚配置：
 - ky-040：
+  - VCC：3.3V
   - CLK：PA9
   - DT：PA8
   - SW：PB15
 - Mosfet：
+  - VIN+：12V
+  - VIN-：GND
   - IO：PA0
 - LDR：
+  - VCC：3.3V
   - ADC：PA1
-
+- PIR：
+  - VCC：5V
+  - OUT：PA2
+  
 ### 软件部分：
 - ky040.c/h：完成
 - mosfet.c/h：完成
+- ldr.c/h：待完善
+- pir.c/h：待完善

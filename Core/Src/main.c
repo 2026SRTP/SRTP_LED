@@ -17,7 +17,6 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
-#include <stdint.h>
 #include "main.h"
 #include "adc.h"
 #include "tim.h"
@@ -28,6 +27,7 @@
 #include "ldr.h"
 #include "ky040.h"
 #include "mosfet.h"
+#include "pir.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -56,6 +56,7 @@ static uint8_t auto_light_ready = 0U;
 
 static int last_count_snapshot = -1;
 static uint32_t last_manual_tick = 0U;
+static uint32_t pir_last_detect_tick = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -104,6 +105,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   KY040_Init();
   MOSFET_Init();
+  PIR_Init();
 
   /* USER CODE END 2 */
 
@@ -129,44 +131,72 @@ int main(void)
             MOSFET_Update(0);
         }
     } else {
-        /* 如果在手动优先超时时间内，继续维持手动值 */
-        if ((HAL_GetTick() - last_manual_tick) < LDR_MANUAL_OVERRIDE_MS) {
+        /* 如果编码器曾被操作过且仍在手动超时内，维持手动值 */
+        if (last_manual_tick != 0U &&
+            ((HAL_GetTick() - last_manual_tick) < LDR_MANUAL_OVERRIDE_MS)) {
             if (light_on) {
                 MOSFET_Update(count);
             } else {
                 MOSFET_Update(0);
             }
         } else {
-            /* 自动模式：LDR 采样 + 滞回更新 PWM */
-            if (light_on) {
-                uint16_t adc_value = LDR_ReadAverage();
+          /* 自动模式：LDR 调光 + PIR 自动开灯 + PIR 触发后延时关灯 */
+          uint8_t pir_detected = PIR_IsDetected();
 
-                if ((auto_light_ready == 0U) ||
-                    ((adc_value > last_adc) ? (adc_value - last_adc) : (last_adc - adc_value)) > LDR_HYSTERESIS_THRESHOLD)
-                {
-                    last_adc = adc_value;
-                    last_pwm = LDR_ToPWM(adc_value);
-                    MOSFET_Update((int)last_pwm);
-                    auto_light_ready = 1U;
-                } else {
-                    MOSFET_Update((int)last_pwm);
-                }
+          if (pir_detected) {
+            pir_last_detect_tick = HAL_GetTick();
+          }
+
+          if (light_on) {
+            /* 只有 PIR 曾经触发过后，才开始执行无人超时关灯 */
+            if ((pir_last_detect_tick != 0U) &&
+              ((HAL_GetTick() - pir_last_detect_tick) > PIR_OFF_DELAY_MS)) {
+              MOSFET_Update(0);
+              light_on = 0U;
+              auto_light_ready = 0U;
+              pir_last_detect_tick = 0U;
             } else {
-                MOSFET_Update(0);
-                auto_light_ready = 0U;
+              /* LDR 自动调光 */
+              uint16_t adc_value = LDR_ReadAverage();
+
+              if ((auto_light_ready == 0U) ||
+                ((adc_value > last_adc) ? (adc_value - last_adc) : (last_adc - adc_value)) > LDR_HYSTERESIS_THRESHOLD)
+              {
+                last_adc = adc_value;
+                last_pwm = LDR_ToPWM(adc_value);
+                MOSFET_Update((int)last_pwm);
+                auto_light_ready = 1U;
+              } else {
+                MOSFET_Update((int)last_pwm);
+              }
             }
+
+          } else {
+            /* 灯关着：PIR 检测到人 → 自动开灯并开始计时 */
+            if (pir_detected) {
+              light_on = 1U;
+              pir_last_detect_tick = HAL_GetTick();
+
+              /* 立即给一次 LDR 输出，避免等待下一轮循环 */
+              uint16_t adc_value = LDR_ReadAverage();
+              last_adc = adc_value;
+              last_pwm = LDR_ToPWM(adc_value);
+              MOSFET_Update((int)last_pwm);
+              auto_light_ready = 1U;
+            } else {
+              MOSFET_Update(0);
+              auto_light_ready = 0U;
+            }
+          }
         }
     }
 
     HAL_Delay(50);
     /* USER CODE END 3 */
   }
-  
   /* USER CODE END WHILE */
-  
+
 }
-
-
 
 /**
   * @brief System Clock Configuration
