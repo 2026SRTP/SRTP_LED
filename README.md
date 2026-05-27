@@ -15,6 +15,9 @@
   - https://e.tb.cn/h.RdH5vJoKmUwEpDR?tk=CRmw5u7choQ
 - PIR：HC-SR501模块
   - https://e.tb.cn/h.RVeZWvKvHjrsj2I?tk=hoqW5wNxnyj
+- 声音传感器：ky-037模块
+  - https://e.tb.cn/h.RUBJbwjYmVPOiKL?tk=5iHU5x5JIib
+
 
 ### 引脚配置：
 - ky-040：
@@ -32,9 +35,13 @@
 - PIR：
   - VCC：5V
   - OUT：PA2
+- ky-037：
+  - VCC：5V
+  - DO：PA3
   
 ### 软件部分：
 - ky040.c/h：完成
 - mosfet.c/h：完成
 - ldr.c/h：待完善
 - pir.c/h：待完善
+- sound.c/h：待测试

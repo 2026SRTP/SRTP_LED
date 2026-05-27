@@ -12,6 +12,7 @@ C_SRCS += \
 ../Core/Src/main.c \
 ../Core/Src/mosfet.c \
 ../Core/Src/pir.c \
+../Core/Src/sound.c \
 ../Core/Src/stm32f1xx_hal_msp.c \
 ../Core/Src/stm32f1xx_it.c \
 ../Core/Src/syscalls.c \
@@ -27,6 +28,7 @@ OBJS += \
 ./Core/Src/main.o \
 ./Core/Src/mosfet.o \
 ./Core/Src/pir.o \
+./Core/Src/sound.o \
 ./Core/Src/stm32f1xx_hal_msp.o \
 ./Core/Src/stm32f1xx_it.o \
 ./Core/Src/syscalls.o \
@@ -42,6 +44,7 @@ C_DEPS += \
 ./Core/Src/main.d \
 ./Core/Src/mosfet.d \
 ./Core/Src/pir.d \
+./Core/Src/sound.d \
 ./Core/Src/stm32f1xx_hal_msp.d \
 ./Core/Src/stm32f1xx_it.d \
 ./Core/Src/syscalls.d \
