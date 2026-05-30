@@ -1,8 +1,8 @@
 /*
- * ky040.c
+ *  ky040.c 旋转编码器
  *
  *  Created on: Mar 14, 2026
- *      Author: Lenovo
+ *      Author: AloysYan
  */
 
 #include "tim.h"

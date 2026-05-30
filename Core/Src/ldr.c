@@ -1,8 +1,12 @@
 /*
- * ldr.c
+ *  ldr.c 光敏电阻
  *
  *  Created on: May 21, 2026
- *      Author: Copilot
+ *      Author: AloysYan
+ *  
+ *  接线说明：
+ *    - VCC：3.3V
+ *    - ADC：PA1
  */
 
 #include "ldr.h"
@@ -10,29 +14,12 @@
 #include "tim.h"
 #include "ky040.h"
 
-static uint8_t ldr_adc_ready = 0U;
-
-/* Ensure ADC1 (hadc1) is initialized. If CubeMX generated MX_ADC1_Init,
-   call it once; otherwise assume user initialized ADC elsewhere. */
-static void LDR_InitHardware(void)
-{
-  if (ldr_adc_ready != 0U)
-  {
-    return;
-  }
-
-  /* If MX_ADC1_Init is available, call it. It's safe to call multiple times. */
-  MX_ADC1_Init();
-
-  ldr_adc_ready = 1U;
-}
-
-/* 读取一次 ADC 转换结果（使用 HAL 接口）。 */
+/* 读取一次 ADC 转换结果（使用 HAL 接口）。
+   ADC1 已由 CubeMX 在 MX_ADC1_Init() 中初始化（main 启动时调用），
+   此处无需重复初始化。 */
 uint16_t LDR_Read(void)
 {
   uint32_t val = 0U;
-
-  LDR_InitHardware();
 
   if (HAL_ADC_Start(&hadc1) != HAL_OK)
   {

@@ -2,7 +2,7 @@
  * mosfet.c
  *
  *  Created on: Mar 14, 2026
- *      Author: Lenovo
+ *      Author: AloysYan
  */
 
 #include "tim.h"

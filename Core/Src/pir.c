@@ -1,11 +1,12 @@
 /*
- * pir.c
+ *  pir.c
  *
  *  Created on: May 25, 2026
- *      Author: Copilot
+ *      Author: AloysYan
  *
- *  HC-SR501 PIR 人体红外感应模块实现
- *  硬件：PA2 ← HC-SR501 OUT，可重复触发模式 (H)
+ *  接线说明：
+ *      - VCC：5V
+ *      - OUT：PA2
  */
 
 #include "pir.h"
@@ -15,20 +16,13 @@ static uint32_t pir_warmup_start = 0U;
 
 /**
  * 初始化 PIR 模块
- * - 配置 PA2 为浮空输入（HC-SR501 自带推挽输出驱动，无需上下拉）
+ * - PA2 已由 CubeMX 在 MX_GPIO_Init() 中配置为输入、无上下拉
  * - 记录预热起始时间戳（非阻塞）
  */
 void PIR_Init(void)
 {
-    GPIO_InitTypeDef gpio_init = {0};
-
-    /* 配置 PA2 为输入 */
-    gpio_init.Pin  = PIR_GPIO_PIN;
-    gpio_init.Mode = GPIO_MODE_INPUT;
-    gpio_init.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(PIR_GPIO_PORT, &gpio_init);
-
-    /* 记录预热起始时间 */
+    /* PA2 已由 CubeMX 在 MX_GPIO_Init() 中配置为输入、无上下拉，
+       此处仅记录预热起始时间，无需重复初始化 GPIO */
     pir_warmup_start = HAL_GetTick();
 }
 
