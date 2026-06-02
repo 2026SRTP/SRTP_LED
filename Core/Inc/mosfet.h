@@ -2,7 +2,7 @@
  * mosfet.h
  *
  *  Created on: Mar 14, 2026
- *      Author: Lenovo
+ *      Author: AloysYan
  */
 
 #ifndef INC_MOSFET_H_

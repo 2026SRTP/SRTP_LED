@@ -2,7 +2,7 @@
  * ldr.h
  *
  *  Created on: May 21, 2026
- *      Author: Copilot
+ *      Author: AloysYan
  */
 
 #ifndef INC_LDR_H_

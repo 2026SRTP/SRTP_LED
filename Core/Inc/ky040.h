@@ -2,7 +2,7 @@
  * ky040.h
  *
  *  Created on: Mar 14, 2026
- *      Author: Lenovo
+ *      Author: AloysYan
  */
 
 #ifndef INC_KY040_H_

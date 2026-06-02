@@ -2,9 +2,8 @@
  * pir.h
  *
  *  Created on: May 25, 2026
- *      Author: Copilot
+ *      Author: AloysYan
  *
- *  HC-SR501 PIR 人体红外感应模块接口
  */
 
 #ifndef INC_PIR_H_

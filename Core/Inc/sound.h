@@ -2,7 +2,7 @@
  * sound.h
  *
  *  Created on: May 26, 2026
- *      Author: Copilot
+ *      Author: AloysYan
  *
  *  KY-037 声音传感器模块接口
  *  硬件：PA3 ← KY-037 DO（数字输出），仅用于判定有无声音

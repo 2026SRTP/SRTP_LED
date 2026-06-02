@@ -3,6 +3,12 @@
  *
  *  Created on: Mar 14, 2026
  *      Author: AloysYan
+ * 
+ * 	接线说明：
+ * 		- VCC：3.3V
+ *		- CLK：PA9
+ *		- DT：PA8
+ *		- SW：PB15
  */
 
 #include "tim.h"
