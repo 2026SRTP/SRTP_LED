@@ -26,9 +26,6 @@ extern "C" {
 
 /* ---------- 接口函数 ---------- */
 
-/** 初始化 PIR 模块（PA2 已由 CubeMX 在 MX_GPIO_Init 中配置） */
-void PIR_Init(void);
-
 /** 读取 PA2 原始电平，返回 PIR_DETECTED 或 PIR_NOT_DETECTED */
 uint8_t PIR_Read(void);
 

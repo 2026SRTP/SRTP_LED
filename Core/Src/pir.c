@@ -6,20 +6,10 @@
  *
  *  接线说明：
  *      - VCC：5V
- *      - OUT：PA2
+ *      - OUT：PA2（已由 CubeMX 在 MX_GPIO_Init 中配置为输入）
  */
 
 #include "pir.h"
-
-/**
- * @brief  初始化 PIR 模块（占位函数）
- * @note   PA2 已由 CubeMX 在 MX_GPIO_Init() 中配置为输入、无上下拉。
- *         此函数保留作为未来扩展的占位。
- */
-void PIR_Init(void)
-{
-    /* PA2 已由 CubeMX 配置，此处无需额外操作 */
-}
 
 /**
  * @brief  读取 HC-SR501 原始输出电平

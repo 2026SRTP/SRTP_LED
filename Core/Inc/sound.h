@@ -33,13 +33,6 @@ extern "C" {
 /* ---------- 接口函数 ---------- */
 
 /**
- * @brief  初始化声音传感器模块
- * @note   配置 PA3 为浮空输入模式（KY-037 自带推挽输出，无需上下拉）
- *         若 CubeMX 已在 MX_GPIO_Init() 中初始化 PA3，此函数仍可安全调用
- */
-void Sound_Init(void);
-
-/**
  * @brief  读取 KY-037 数字输出的原始电平
  * @retval SOUND_DETECTED     检测到声音（PA3 为高电平）
  * @retval SOUND_NOT_DETECTED 未检测到声音（PA3 为低电平）

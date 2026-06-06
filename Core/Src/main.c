@@ -139,10 +139,8 @@ int main(void)
   MX_TIM2_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
-  KY040_Init();       /* 初始化 KY-040 旋转编码器（亮度手动调节 + 开关） */
-  MOSFET_Init();       /* 初始化 MOSFET PWM 输出（TIM2 CH1 驱动 LED 灯带） */
-  PIR_Init();          /* 初始化 HC-SR501 人体红外传感器（PA2 输入） */
-  Sound_Init();        /* 初始化 KY-037 声音传感器（PA3 输入，数字输出） */
+  KY040_Init();       /* 初始化 KY-040 旋转编码器（启动 TIM1 编码器接口） */
+  MOSFET_Init();       /* 初始化 MOSFET PWM 输出（启动 TIM2 CH1） */
 
   /* USER CODE END 2 */
 

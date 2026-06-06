@@ -4,8 +4,7 @@
  *  Created on: May 26, 2026
  *      Author: AloysYan
  *
- *  硬件说明：
- *    板上蓝色电位器用于调节灵敏度阈值
+ *  硬件说明：板上蓝色电位器用于调节灵敏度阈值
  *
  *  接线说明：
  *    KY-037 VCC → STM32 5V
@@ -15,17 +14,6 @@
  */
 
 #include "sound.h"
-
-/**
- * @brief  初始化声音传感器模块（占位函数）
- * @note   PA3 已由 CubeMX 在 MX_GPIO_Init() 中配置为输入、无上下拉。
- *         此函数保留作为未来扩展（如软件滤波状态初始化）的占位。
- */
-void Sound_Init(void)
-{
-    /* PA3 已由 CubeMX 在 MX_GPIO_Init() 中配置为输入、无上下拉，
-       此处无需重复初始化 GPIO。保留此函数作为未来扩展的占位。 */
-}
 
 /**
  * @brief  读取 KY-037 数字输出的原始电平状态
