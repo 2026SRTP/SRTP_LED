@@ -15,8 +15,16 @@
 
 #include "sound.h"
 
+/* ---- 软件去抖状态 ---- */
+/*
+ * 连续高电平计数：每轮主循环（50ms）若读到 HIGH 则 +1，读到 LOW 则清零。
+ * 当计数 >= SOUND_DEBOUNCE_CNT 时 Sound_IsDetected() 才返回 SOUND_DETECTED。
+ * 这过滤了 <100ms 的尖峰毛刺，同时不损失对真实声音（100ms+）的响应。
+ */
+static uint8_t sound_high_cnt = 0U;
+
 /**
- * @brief  读取 KY-037 数字输出的原始电平状态
+ * @brief  读取 KY-037 数字输出的原始电平状态（无滤波）
  * @note   直接读取 PA3 引脚电平：
  *         - 高电平（GPIO_PIN_SET） → 环境声音超过阈值，认为"有声"
  *         - 低电平（GPIO_PIN_RESET）→ 环境声音低于阈值，认为"安静"
@@ -34,21 +42,36 @@ uint8_t Sound_Read(void)
 }
 
 /**
- * @brief  带扩展能力的统一声音检测接口
- * @note   当前版本直接返回 Sound_Read() 的原始结果（无额外处理）。
- *         KY-037 的 LM393 比较器已提供硬件滞回，输出信号相对干净；
- *         且主循环以 50ms 间隔轮询，本身就提供了一定程度的自然防抖。
- *
- *         如需添加软件层面的抗干扰处理，可在此函数内扩展，例如：
- *         - 要求连续 2~3 次读到高电平才算有效（滤除尖峰噪声）
- *         - 要求在最近 N 毫秒内有至少 K 次高电平才触发（占空比判定）
- *         - 添加最小静音间隔，防止一次长音被重复计数
- *
- * @retval SOUND_DETECTED     有声
+ * @brief  带软件去抖的声音检测
+ * @note   去抖机制（连续采样确认）：
+ *         - 每轮读到 HIGH：计数器 +1，达到 SOUND_DEBOUNCE_CNT(2) 才返回"有声"
+ *         - 读到 LOW：计数器立即清零，返回"安静"
+ *         效果：滤除 <100ms 的尖峰干扰，但 ≥100ms 的真实声音信号不受影响。
+ *         这防止了瞬时噪声反复重置无人计时器导致灯无法关闭的问题。
+ * @retval SOUND_DETECTED     确认有声
  * @retval SOUND_NOT_DETECTED 安静
  */
 uint8_t Sound_IsDetected(void)
 {
-    /* 当前版本：直接透传硬件读数，不做软件滤波 */
-    return Sound_Read();
+    if (Sound_Read() == SOUND_DETECTED)
+    {
+        /* 读到高电平：连续计数 +1（防溢出保护） */
+        if (sound_high_cnt < 255U)
+        {
+            sound_high_cnt++;
+        }
+
+        /* 达到确认阈值 → 确认真实声音 */
+        if (sound_high_cnt >= SOUND_DEBOUNCE_CNT)
+        {
+            return SOUND_DETECTED;
+        }
+    }
+    else
+    {
+        /* 读到低电平：立刻清零计数器，回到安静状态 */
+        sound_high_cnt = 0U;
+    }
+
+    return SOUND_NOT_DETECTED;
 }

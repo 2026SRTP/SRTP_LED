@@ -30,22 +30,37 @@ extern "C" {
 /* KY-037 DO 输出低电平时表示环境安静 */
 #define SOUND_NOT_DETECTED      0U
 
+/* ---------- 软件滤波参数 ---------- */
+/*
+ * 去抖确认次数：需要连续读到多少次 HIGH 才确认"有声"。
+ * 主循环周期为 50ms，因此实际确认时间 = SOUND_DEBOUNCE_CNT × 50ms。
+ *
+ * 阈值选择依据（平衡关灯防噪与人在防灭）：
+ *   - 阈值=1：无滤波，50ms 毛刺即可触发 → 噪声可能导致关灯超时被不断重置
+ *   - 阈值=2：100ms 确认 ← 推荐。滤除 50ms 尖峰，但能捕获 100ms+ 的真实声音
+ *   - 阈值=3：150ms 确认，更稳但可能漏掉短暂声音（如轻敲键盘）
+ *
+ * 当前选用 2：既能过滤电气毛刺，又不会因阈值过严导致人静止时
+ * 因短暂无声而触发 5 秒超时误关灯。
+ */
+#define SOUND_DEBOUNCE_CNT      2U
+
 /* ---------- 接口函数 ---------- */
 
 /**
- * @brief  读取 KY-037 数字输出的原始电平
+ * @brief  读取 KY-037 数字输出的原始电平（无滤波）
  * @retval SOUND_DETECTED     检测到声音（PA3 为高电平）
  * @retval SOUND_NOT_DETECTED 未检测到声音（PA3 为低电平）
  */
 uint8_t Sound_Read(void);
 
 /**
- * @brief  带扩展接口的声音检测函数
- * @note   当前版本直接返回 Sound_Read() 的原始结果
- *         后续可在此函数内添加软件防抖、最小持续检测时间等逻辑
- *         例如：要求连续 N 次读到高电平才算有效，过滤瞬时噪声
- * @retval SOUND_DETECTED     检测到声音
- * @retval SOUND_NOT_DETECTED 未检测到声音
+ * @brief  带软件去抖的声音检测
+ * @note   需连续 SOUND_DEBOUNCE_CNT 次（当前为 2 次 = 100ms）读到 HIGH 才确认有声；
+ *         任何一次读到 LOW 立即清零计数器、返回"安静"。
+ *         此设计可有效滤除电磁干扰引起的单次尖峰脉冲。
+ * @retval SOUND_DETECTED     确认有声
+ * @retval SOUND_NOT_DETECTED 安静（含未达确认阈值的瞬时高电平）
  */
 uint8_t Sound_IsDetected(void);
 
