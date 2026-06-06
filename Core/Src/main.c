@@ -54,14 +54,12 @@
 static uint16_t last_adc = 0U;  /* 上一次 LDR 读取的 ADC 值，用于滞回比较 */
 static uint16_t last_pwm = 0U;  /* 上一次计算出的 PWM 占空比输出值 */
 
-/* ---- 手动优先超时参数 ---- */
-/* 编码器操作后，手动模式保持的时长（单位：毫秒）。
-   超时后自动恢复到 PIR+声音 自动控制模式 */
-#define LDR_MANUAL_OVERRIDE_MS 5000U
-
-/* ---- 手动模式状态追踪 ---- */
-static int      last_count_snapshot = -1;   /* 上一轮编码器计数值的快照，用于检测旋钮是否被操作 */
-static uint32_t last_manual_tick    = 0U;   /* 最后一次手动操作（编码器动作）的时间戳 */
+/*
+ * 编码器计数值快照，用于检测"自动模式下编码器是否被拧动"。
+ * 自动模式下若 count 与快照不一致，说明用户拧了旋钮 → 切到手动模式。
+ * 关灯模式和手动模式下每轮同步快照，确保切换到自动时不会误触发。
+ */
+static int last_count_snapshot = 0;
 
 /* ---- PIR + 声音 复合自动控制相关变量 ---- */
 /*
@@ -79,6 +77,21 @@ static uint32_t last_manual_tick    = 0U;   /* 最后一次手动操作（编码
  * 灯亮时，若 (当前tick - last_activity_tick) > AUTO_OFF_TIMEOUT_MS，则关灯。
  */
 static uint32_t last_activity_tick = 0U;
+
+/*
+ * 自动模式下的灯开关状态（仅 MODE_AUTO 下有效）。
+ * 0 = 自动模式灯灭，1 = 自动模式灯亮。
+ * 与全局 mode 变量不同：mode 表示用户选择的工作模式（0/1/2），
+ * auto_light_on 只追踪自动模式内部灯光是否因传感器触发而亮起。
+ */
+static uint8_t auto_light_on = 0U;
+
+/*
+ * 上一轮的工作模式，用于检测模式切换事件。
+ * 当检测到从其他模式进入 MODE_AUTO 时，强制重置自动模式内部状态，
+ * 避免因 auto_light_on / last_activity_tick 残留值导致的异常行为。
+ */
+static int last_mode = MODE_OFF;
 
 /* USER CODE END PV */
 
@@ -140,170 +153,207 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    /* 更新编码器状态并处理按键输入 */
+    /* ================================================================
+     * 每轮循环：更新编码器 → 检测按键 → 按模式分发控制
+     * ================================================================
+     * KY040_Update() 始终运行，确保 count 实时反映编码器位置。
+     * KY040_Key() 检测按键并循环切换 mode（OFF→MANUAL→AUTO）。
+     * 然后根据当前 mode 执行对应的控制逻辑。
+     * ================================================================ */
     KY040_Update();
     KY040_Key();
 
-    /* ================================================================
-     * 手动控制检测（编码器优先）
-     * ================================================================
-     * 当用户旋转编码器时，立即进入"手动优先模式"：
-     *   - 亮度由编码器位置直接决定，不受 PIR/声音/LDR 影响
-     *   - 手动模式持续 LDR_MANUAL_OVERRIDE_MS（5 秒），超时后自动切回自动模式
-     *   - 灯开关状态（light_on）仍由 KY040_Key() 按键控制
-     * ================================================================ */
-    if (last_count_snapshot != count) {
-        /* 编码器计数值发生变化 —— 用户正在操作旋钮，进入手动优先 */
-        last_count_snapshot = count;
-        last_manual_tick = HAL_GetTick();   /* 记录手动操作时刻，启动超时计时 */
+    /*
+     * 模式切换检测：
+     * 当用户通过按键从其他模式进入 MODE_AUTO 时，强制重置自动模式内部状态
+     * （auto_light_on=0, last_activity_tick=0），确保每次进入自动模式都
+     * 从"灯灭子状态"开始，立即根据传感器状态重新判断是否开灯。
+     * 这解决了从"模式2→拧编码器→模式1→按键→模式2"路径下，
+     * auto_light_on 残留为 1、last_activity_tick 过期导致立即关灯的 bug。
+     */
+    if (mode != last_mode && mode == MODE_AUTO)
+    {
+        auto_light_on     = 0U;
+        last_activity_tick = 0U;
+    }
+    last_mode = mode;   /* 记录本轮模式，供下轮检测切换 */
 
-        /* 根据当前开关状态输出对应亮度 */
-        if (light_on) {
-            MOSFET_Update(count);
-        } else {
-            MOSFET_Update(0);
-        }
-    } else {
+    switch (mode)
+    {
+    /* =================================================================
+     * 模式 0 — OFF（关灯）
+     * =================================================================
+     * 强制关灯，PWM 输出为 0。
+     * 编码器和所有传感器均被忽略。
+     * 同步编码器快照，为后续切换到自动模式做准备。
+     * ================================================================= */
+    case MODE_OFF:
+        MOSFET_Update(0);
+        last_count_snapshot = count;   /* 同步快照，防止切自动时误触发 */
+        break;
+
+    /* =================================================================
+     * 模式 1 — MANUAL（手动调光）
+     * =================================================================
+     * 灯光亮度完全由编码器旋钮位置决定，PWM = count。
+     * PIR、声音、LDR 传感器全部不参与控制。
+     * 此模式下拧旋钮实时改变亮度，无超时限制。
+     * 同步编码器快照，为后续切换到自动模式做准备。
+     * ================================================================= */
+    case MODE_MANUAL:
+        MOSFET_Update(count);
+        last_count_snapshot = count;   /* 同步快照，防止切自动时误触发 */
+        break;
+
+    /* =================================================================
+     * 模式 2 — AUTO（全自动控制）
+     * =================================================================
+     * 控制策略：
+     *   [A] 编码器检测：若旋钮被拧动 → 立即切到手动模式（用户接管）
+     *   [B] 传感器读取：PIR（人体红外） + KY-037（声音）
+     *   [C] 活动计时：PIR 或声音任一触发 → 刷新 last_activity_tick
+     *   [D] 灯灭子状态：仅 PIR 可开灯，声音不能（防门外噪音误触发）
+     *       开灯时立即用 LDR 环境光传感器计算合适的 PWM 亮度
+     *   [E] 灯亮子状态：PIR 或声音均可续命；连续 5 秒无活动则关灯
+     *       期间持续 LDR 自动调光（带滞回，防闪烁）
+     * ================================================================= */
+    case MODE_AUTO:
+    default:
         /*
-         * 编码器未被操作：检查是否仍在手动优先超时窗口内。
-         * 若手动操作后不到 LDR_MANUAL_OVERRIDE_MS（5 秒），继续维持手动值，
-         * 给用户充足的调节时间，避免刚调好就被自动模式覆盖。
+         * [A] 编码器拧动检测：
+         * 比较当前 count 与上一轮快照，若不一致说明用户拧了旋钮。
+         * 立即切到模式 1（手动），用当前编码器值直接设置亮度。
          */
-        if (last_manual_tick != 0U &&
-            ((HAL_GetTick() - last_manual_tick) < LDR_MANUAL_OVERRIDE_MS)) {
-            if (light_on) {
-                MOSFET_Update(count);
-            } else {
+        if (last_count_snapshot != count)
+        {
+            last_count_snapshot = count;
+            mode = MODE_MANUAL;         /* 用户接管 → 切手动 */
+            MOSFET_Update(count);
+            break;                      /* 跳出 switch，本轮不执行自动逻辑 */
+        }
+
+        /*
+         * [B] 读取两个传感器的当前状态。
+         * PIR_IsDetected() 内部包含 1 秒预热保护（测试用，正式需 >30s）。
+         */
+        uint8_t pir_detected = PIR_IsDetected();   /* 人体红外：有人=1，无人=0 */
+        uint8_t snd_detected = Sound_IsDetected();  /* 声音检测：有声=1，安静=0 */
+
+        /*
+         * [C] 活动计时器刷新：
+         * PIR 或声音任意一个检测到活动，都将 last_activity_tick 更新为当前时刻。
+         * 相当于"有人活动就重置无人倒计时"。
+         */
+        if (pir_detected == PIR_DETECTED || snd_detected == SOUND_DETECTED)
+        {
+            last_activity_tick = HAL_GetTick();
+        }
+
+        /* ---- 自动模式内部状态机 ---- */
+        if (auto_light_on == 0U)
+        {
+            /* ========================================================
+             * [D] 灯灭子状态 —— 仅允许 PIR 开灯
+             * ========================================================
+             * 设计意图：防止门外噪音、隔壁房间声音等误触发开灯。
+             * 只有人体红外确认"有人进入"时才允许开灯。
+             * 开灯后立即根据 LDR 环境光传感器计算合适的 PWM 亮度。
+             * ======================================================== */
+            if (pir_detected == PIR_DETECTED)
+            {
+                /* PIR 检测到有人进入 → 自动开灯 */
+                auto_light_on = 1U;
+                /* 记录活动时间戳，启动关灯倒计时 */
+                last_activity_tick = HAL_GetTick();
+
+                /*
+                 * 立即读取 LDR 环境光并计算 PWM 输出。
+                 * 不等待下一轮循环，确保开灯响应迅速、无延迟。
+                 */
+                uint16_t adc_value = LDR_ReadAverage();
+                last_adc = adc_value;
+                last_pwm = LDR_ToPWM(adc_value);
+                MOSFET_Update((int)last_pwm);
+            }
+            else
+            {
+                /*
+                 * 无人（可能有声也可能无声）→ 保持关灯。
+                 * 声音传感器在此状态下被忽略：门外噪音不会误开灯。
+                 */
                 MOSFET_Update(0);
             }
-        } else {
-            /* ============================================================
-             * 自动模式：PIR + 声音 复合人体存在检测 + LDR 自动调光
-             * ============================================================
-             *
-             * 控制策略（三段式）：
-             *
-             *   [1] 读取传感器状态
-             *       读取 PIR（人体红外）和 KY-037 声音传感器的当前状态。
-             *       若任一方检测到活动，刷新 last_activity_tick 时间戳。
-             *
-             *   [2] 灯灭状态 —— 仅允许 PIR 开灯
-             *       设计意图：防止门外噪音、隔壁房间声音等误触发开灯。
-             *       只有人体红外传感器确认"有人进入"时才允许开灯。
-             *       开灯后立即根据 LDR 环境光传感器计算合适的 PWM 亮度。
-             *
-             *   [3] 灯亮状态 —— PIR 或声音均可"续命"，超时关灯
-             *       设计意图：人在房间内可能有静止不动的时候（如坐着看书），
-             *       此时 PIR 可能无法检测到。但人会有自然的声音（翻书、咳嗽、
-             *       打字等），声音传感器可捕捉这些信号来维持灯光。
-             *       只有当连续 AUTO_OFF_TIMEOUT_MS（5 秒）既无 PIR 也无声音
-             *       时，才判定"人已离开"并关灯。
-             *
-             *   LDR 自动调光：灯亮期间持续读取光敏电阻，根据环境亮度自动
-             *   调节 PWM 占空比。使用滞回阈值（LDR_HYSTERESIS_THRESHOLD）
-             *   避免 ADC 微小波动导致灯光闪烁。
-             * ============================================================ */
-
-            /* [1] 读取两个传感器的当前状态 */
-            uint8_t pir_detected = PIR_IsDetected();   /* 人体红外：有人=1，无人=0 */
-            uint8_t snd_detected = Sound_IsDetected();  /* 声音检测：有声=1，安静=0 */
+        }
+        else
+        {
+            /* ========================================================
+             * [E] 灯亮子状态 —— PIR 或声音可续命，超时自动关灯
+             * ========================================================
+             * 设计意图：人在房间内可能静止不动（如坐着看书），
+             * 此时 PIR 可能无法检测到。但人会有自然声音（翻书、咳嗽、
+             * 打字等），声音传感器捕捉这些信号来维持灯光。
+             * 只有连续 AUTO_OFF_TIMEOUT_MS（5 秒）既无 PIR 也无声音，
+             * 才判定"人已离开"并关灯。
+             * ======================================================== */
 
             /*
-             * 活动计时器刷新：
-             * PIR 或声音任意一个检测到活动，都将 last_activity_tick 更新为当前时刻。
-             * 这相当于"重置无人计时器"——只要还有人活动的迹象，就不开始关灯倒计时。
+             * 超时关灯判定：
+             * 若距离上一次活动已经超过 AUTO_OFF_TIMEOUT_MS（5 秒），
+             * 说明房间内连续指定时间没有任何人体活动迹象 → 关灯。
              */
-            if (pir_detected == PIR_DETECTED || snd_detected == SOUND_DETECTED) {
-                last_activity_tick = HAL_GetTick();
+            if ((last_activity_tick != 0U) &&
+                ((HAL_GetTick() - last_activity_tick) > AUTO_OFF_TIMEOUT_MS))
+            {
+                /* 超时：关灯，清零自动模式内部状态 */
+                MOSFET_Update(0);
+                auto_light_on = 0U;
+                last_activity_tick = 0U;
             }
+            else
+            {
+                /*
+                 * 未超时：人在房间里（或刚离开不到 5 秒）。
+                 * 继续执行 LDR 环境光自动调光。
+                 */
 
-            if (light_on == 0U) {
-                /* ========================================================
-                 * [2] 灯灭状态：仅 PIR 可触发开灯，声音不能
-                 * ======================================================== */
-                if (pir_detected == PIR_DETECTED) {
-                    /* PIR 检测到有人进入 → 开灯 */
-                    light_on = 1U;
-                    /* 首次开灯时记录活动时间戳，启动关灯倒计时 */
-                    last_activity_tick = HAL_GetTick();
+                /* 读取当前环境光 ADC 值（10 次采样取平均） */
+                uint16_t adc_value = LDR_ReadAverage();
 
-                    /*
-                     * 立即读取一次 LDR 环境光并计算 PWM 输出。
-                     * 不等待下一轮循环，确保开灯响应迅速、无延迟。
-                     */
-                    uint16_t adc_value = LDR_ReadAverage();
+                /*
+                 * 滞回比较（Hysteresis）：
+                 * 仅当 ADC 变化量超过 LDR_HYSTERESIS_THRESHOLD(50) 时才更新 PWM。
+                 * 避免 ADC 采样噪声导致的灯光微小闪烁，使亮度调节更平滑稳定。
+                 */
+                uint16_t delta = (adc_value > last_adc)
+                                 ? (adc_value - last_adc)
+                                 : (last_adc - adc_value);
+
+                if (delta > LDR_HYSTERESIS_THRESHOLD)
+                {
+                    /* 环境光变化显著 → 更新 PWM 输出 */
                     last_adc = adc_value;
                     last_pwm = LDR_ToPWM(adc_value);
                     MOSFET_Update((int)last_pwm);
-                } else {
-                    /*
-                     * 无人（可能有声也可能无声）→ 保持关灯。
-                     * 声音传感器在此状态下被忽略：门外噪音不会误开灯。
-                     */
-                    MOSFET_Update(0);
                 }
-            } else {
-                /* ========================================================
-                 * [3] 灯亮状态：PIR 或声音可续命，超时自动关灯
-                 * ======================================================== */
-
-                /*
-                 * 超时关灯判定：
-                 * 若距离上一次活动（PIR 或声音触发）已经超过 AUTO_OFF_TIMEOUT_MS，
-                 * 说明房间内连续指定时间没有任何人体活动迹象，
-                 * 判定"人已离开"，执行关灯。
-                 */
-                if ((last_activity_tick != 0U) &&
-                    ((HAL_GetTick() - last_activity_tick) > AUTO_OFF_TIMEOUT_MS)) {
-                    /* 超时：关灯，清零相关状态 */
-                    MOSFET_Update(0);
-                    light_on = 0U;
-                    last_activity_tick = 0U;   /* 重置活动计时器，等待下次 PIR 触发 */
-                } else {
-                    /*
-                     * 未超时：人在房间里（或刚离开不到 5 秒）。
-                     * 继续执行 LDR 环境光自动调光。
-                     */
-
-                    /* 读取当前环境光 ADC 值 */
-                    uint16_t adc_value = LDR_ReadAverage();
-
-                    /*
-                     * 滞回比较（Hysteresis）：
-                     * 仅当 ADC 变化量超过 LDR_HYSTERESIS_THRESHOLD 时才更新 PWM 输出。
-                     * 这避免了 ADC 采样噪声导致的灯光微小闪烁，
-                     * 使亮度调节更平滑稳定。
-                     *
-                     * 注：首次进入此分支时 last_pwm 为 0，滞回条件会自动满足，
-                     *     因此首次会正常输出亮度。
-                     */
-                    uint16_t delta = (adc_value > last_adc)
-                                     ? (adc_value - last_adc)
-                                     : (last_adc - adc_value);
-
-                    if (delta > LDR_HYSTERESIS_THRESHOLD) {
-                        /* 环境光变化超过阈值 → 更新 PWM 输出 */
-                        last_adc = adc_value;
-                        last_pwm = LDR_ToPWM(adc_value);
-                        MOSFET_Update((int)last_pwm);
-                    } else {
-                        /* 环境光变化不大 → 维持上一次的 PWM 输出，避免闪烁 */
-                        MOSFET_Update((int)last_pwm);
-                    }
+                else
+                {
+                    /* 环境光变化不大 → 维持上一次的 PWM 输出，避免闪烁 */
+                    MOSFET_Update((int)last_pwm);
                 }
             }
         }
+        break;
     }
 
     /*
-     * 主循环延时 50 毫秒。
-     * 说明：
-     *   - 50ms 的轮询周期对于人体检测（PIR 响应约 100~300ms）足够快
-     *   - 对于声音检测，50ms 能可靠捕获持续时间 ≥100ms 的声音事件（如拍手、说话）
-     *   - 此延时同时决定了 PWM 更新频率（20Hz），远超人眼对灯光闪烁的感知阈值
+     * 主循环延时 50 毫秒（20Hz 轮询频率）。
+     *   - 对人体检测（PIR 响应约 100~300ms）足够快
+     *   - 能可靠捕获持续时间 ≥100ms 的声音事件（拍手、说话）
+     *   - PWM 更新频率 20Hz，远超人眼闪烁感知阈值
      */
     HAL_Delay(50);
   /* USER CODE END 3 */
+  }
 }
 
 /**

@@ -52,6 +52,7 @@ uint8_t PIR_IsDetected(void)
 {
     /* 预热保护：未初始化或尚在预热期内 */
     
+    /*
     if (pir_warmup_start == 0U)
     {
         return PIR_NOT_DETECTED;
@@ -60,6 +61,7 @@ uint8_t PIR_IsDetected(void)
     {
         return PIR_NOT_DETECTED;
     }
+    */
 
     return PIR_Read();
     
