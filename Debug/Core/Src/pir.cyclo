@@ -1,3 +1,0 @@
-../Core/Src/pir.c:19:6:PIR_Init	1
-../Core/Src/pir.c:30:9:PIR_Read	2
-../Core/Src/pir.c:45:9:PIR_IsDetected	1

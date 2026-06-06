@@ -1,3 +1,0 @@
-../Core/Src/ldr.c:20:10:LDR_Read	3
-../Core/Src/ldr.c:42:10:LDR_ReadAverage	2
-../Core/Src/ldr.c:58:10:LDR_ToPWM	3
