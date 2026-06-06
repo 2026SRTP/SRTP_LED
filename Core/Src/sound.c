@@ -8,7 +8,7 @@
  *    板上蓝色电位器用于调节灵敏度阈值
  *
  *  接线说明：
- *    KY-037 VCC → STM32 5V（模块支持 3.3V~5V 供电）
+ *    KY-037 VCC → STM32 5V
  *    KY-037 GND → STM32 GND
  *    KY-037 DO  → STM32 PA3
  *    KY-037 AO  → 悬空
